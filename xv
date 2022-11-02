@@ -4,17 +4,21 @@ ExpressVPN GUI
 ==============
 """
 
-from subprocess import run, PIPE, STDOUT
+from enum import Enum
+from subprocess import run, Popen, PIPE, STDOUT
 import PySimpleGUI as sg
 
 
-CONNECTED_COLOR = "green"
-NOT_CONNECTED_COLOR ="red"
 FONT = ('Ubuntu 18')
+STATUS = Enum('Status', ['CONNECTED', 'CONNECTING', 'DISCONNECTED'])
+COLOR = {STATUS.CONNECTED: "green", STATUS.DISCONNECTED: "red", STATUS.CONNECTING: "orange"}
+TOGGLE = {STATUS.CONNECTED: "Disconnect", STATUS.DISCONNECTED: "Connect", STATUS.CONNECTING: "Connecting"}
 
 
-def expressvpn(*cmd):
+def expressvpn(*cmd, background=False):
     cmds = " ".join(cmd)
+    if background:
+        return Popen(f"expressvpn {cmds}", shell=True)
     res = run(f"expressvpn {cmds}", shell=True, universal_newlines=True, stdout=PIPE, stderr=STDOUT)
     return res.stdout.strip("\n").strip()
 
@@ -30,35 +34,37 @@ def locs():
 def status():
     return expressvpn("status").split("\n", maxsplit=1)[0].strip()
 
-def connnected(status_):
-    return not status_.startswith("Not")
+def parse_status(status_):
+    if status_.startswith("Not"):
+        return STATUS.DISCONNECTED
+    if "Connected to" in status_:
+        return STATUS.CONNECTED
+    return STATUS.CONNECTING
 
-def toggle_text(status_):
-    return "Disconnect" if connnected(status_) else "Connect"
-
-def status_text(status_):
-    if connnected(status_):
+def status_text(status_, parsed):
+    if parsed == STATUS.CONNECTED:
         return status_[10:]
+    if parsed == STATUS.CONNECTING:
+        return status_[10:-4]
     return status_
-
-def color(status_):
-    return CONNECTED_COLOR if connnected(status_) else NOT_CONNECTED_COLOR
-
 
 if __name__ == "__main__":
 
     keys, descriptors = locs()
     status_ = status()
-    color_ = color(status_)
+    parsed = parse_status(status_)
 
-    txt = sg.Text(status_text(status_),
+    txt = sg.Text(status_text(status_, parsed),
                   font=FONT,
-                  background_color=color_,
+                  background_color=COLOR[parsed],
                   justification="center",
                   key="txt")
-    button = sg.Button(toggle_text(status_),
+
+    button = sg.Button(TOGGLE[parsed],
                        font=FONT,
+                       disabled=parsed == STATUS.CONNECTING,
                        key="toggle")
+
     choice = sg.Combo(descriptors,
                       default_value=descriptors[0],
                       font=FONT,
@@ -68,7 +74,7 @@ if __name__ == "__main__":
     column = sg.Column([[txt], [button, choice]],
                         vertical_alignment='center',
                         justification='center',
-                        background_color=color_,
+                        background_color=COLOR[parsed],
                         key='frame')
 
     window = sg.Window("xv", [[column]], finalize=True)
@@ -78,26 +84,25 @@ if __name__ == "__main__":
     while True:
 
         status_ = status()
-        color_ = color(status_)
+        parsed = parse_status(status_)
+        window['loc'].ParentRowFrame.config(background=COLOR[parsed])
+        window['toggle'].ParentRowFrame.config(background=COLOR[parsed])
+        window['txt'].ParentRowFrame.config(background=COLOR[parsed])
+        window['frame'].Widget.config(background=COLOR[parsed])
+        window['frame'].Widget.config(highlightbackground=COLOR[parsed])
+        window['frame'].Widget.config(highlightcolor=COLOR[parsed])
+        window["txt"].update(status_text(status_, parsed), background_color=COLOR[parsed])
+        window["toggle"].update(TOGGLE[parsed], disabled=parsed == STATUS.CONNECTING)
 
-        window['loc'].ParentRowFrame.config(background=color_)
-        window['toggle'].ParentRowFrame.config(background=color_)
-        window['txt'].ParentRowFrame.config(background=color_)
-        window['frame'].Widget.config(background=color_)
-        window['frame'].Widget.config(highlightbackground=color_)
-        window['frame'].Widget.config(highlightcolor=color_)
-        window["toggle"].update(toggle_text(status_))
-        window["txt"].update(status_text(status_), background_color=color_)
-
-        event, values = window.read()
+        event, values = window.read(timeout=1)
 
         if event == "toggle":
 
-            if connnected(status_):
+            if parsed == STATUS.CONNECTED:
                 expressvpn("disconnect")
             else:
                 loc = keys[descriptors.index(values["loc"])]
-                expressvpn("connect", loc)
+                expressvpn("connect", loc, background=True)
 
         elif event == sg.WINDOW_CLOSED:
             break
