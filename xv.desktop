@@ -1,0 +1,9 @@
+[Desktop Entry]
+Encoding=UTF-8
+Type=Application
+Terminal=false
+Exec=xv
+Name=Unofficial ExpressVPN GUI
+Icon=Gnome-security-medium.svg
+
+

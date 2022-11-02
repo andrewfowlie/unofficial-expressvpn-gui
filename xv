@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+"""
+ExpressVPN GUI
+==============
+"""
+
+from subprocess import run, PIPE, STDOUT
+import PySimpleGUI as sg
+
+
+CONNECTED_COLOR = "green"
+NOT_CONNECTED_COLOR ="red"
+FONT = ('Ubuntu 18')
+
+
+def expressvpn(*cmd):
+    cmds = " ".join(cmd)
+    res = run(f"expressvpn {cmds}", shell=True, universal_newlines=True, stdout=PIPE, stderr=STDOUT)
+    return res.stdout.strip("\n").strip()
+
+def parse(line):
+    words = [w.strip() for w in line.split("\t") if w.strip()]
+    return words[0], words[-1]
+
+def locs():
+    lines = expressvpn("ls").split("\n")[3:-3]
+    pairs = [parse(line) for line in lines]
+    return map(list, zip(*pairs))
+
+def status():
+    return expressvpn("status").split("\n", maxsplit=1)[0].strip()
+
+def connnected(status_):
+    return not status_.startswith("Not")
+
+def toggle_text(status_):
+    return "Disconnect" if connnected(status_) else "Connect"
+
+def status_text(status_):
+    if connnected(status_):
+        return status_[10:]
+    return status_
+
+def color(status_):
+    return CONNECTED_COLOR if connnected(status_) else NOT_CONNECTED_COLOR
+
+
+if __name__ == "__main__":
+
+    keys, descriptors = locs()
+    status_ = status()
+    color_ = color(status_)
+
+    txt = sg.Text(status_text(status_),
+                  font=FONT,
+                  background_color=color_,
+                  justification="center",
+                  key="txt")
+    button = sg.Button(toggle_text(status_),
+                       font=FONT,
+                       key="toggle")
+    choice = sg.Combo(descriptors,
+                      default_value=descriptors[0],
+                      font=FONT,
+                      readonly=True,
+                      key="loc")
+
+    column = sg.Column([[txt], [button, choice]],
+                        vertical_alignment='center',
+                        justification='center',
+                        background_color=color_,
+                        key='frame')
+
+    window = sg.Window("xv", [[column]], finalize=True)
+    window['frame'].expand(True, True, True)
+    window['txt'].expand(True, True, True)
+
+    while True:
+
+        status_ = status()
+        color_ = color(status_)
+
+        window['loc'].ParentRowFrame.config(background=color_)
+        window['toggle'].ParentRowFrame.config(background=color_)
+        window['txt'].ParentRowFrame.config(background=color_)
+        window['frame'].Widget.config(background=color_)
+        window['frame'].Widget.config(highlightbackground=color_)
+        window['frame'].Widget.config(highlightcolor=color_)
+        window["toggle"].update(toggle_text(status_))
+        window["txt"].update(status_text(status_), background_color=color_)
+
+        event, values = window.read()
+
+        if event == "toggle":
+
+            if connnected(status_):
+                expressvpn("disconnect")
+            else:
+                loc = keys[descriptors.index(values["loc"])]
+                expressvpn("connect", loc)
+
+        elif event == sg.WINDOW_CLOSED:
+            break
