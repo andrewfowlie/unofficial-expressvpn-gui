@@ -12,7 +12,7 @@ import PySimpleGUI as sg
 FONT = ('Ubuntu 18')
 STATUS = Enum('Status', ['CONNECTED', 'CONNECTING', 'DISCONNECTED'])
 COLOR = {STATUS.CONNECTED: "green", STATUS.DISCONNECTED: "red", STATUS.CONNECTING: "orange"}
-TOGGLE = {STATUS.CONNECTED: "Disconnect", STATUS.DISCONNECTED: "Connect", STATUS.CONNECTING: "Connecting"}
+TOGGLE = {STATUS.CONNECTED: "Disconnect", STATUS.DISCONNECTED: "Connect", STATUS.CONNECTING: "Cancel"}
 
 
 def expressvpn(*cmd, background=False):
@@ -62,7 +62,6 @@ if __name__ == "__main__":
 
     button = sg.Button(TOGGLE[parsed],
                        font=FONT,
-                       disabled=parsed == STATUS.CONNECTING,
                        key="toggle")
 
     choice = sg.Combo(descriptors,
@@ -92,13 +91,13 @@ if __name__ == "__main__":
         window['frame'].Widget.config(highlightbackground=COLOR[parsed])
         window['frame'].Widget.config(highlightcolor=COLOR[parsed])
         window["txt"].update(status_text(status_, parsed), background_color=COLOR[parsed])
-        window["toggle"].update(TOGGLE[parsed], disabled=parsed == STATUS.CONNECTING)
+        window["toggle"].update(TOGGLE[parsed])
 
         event, values = window.read(timeout=1)
 
         if event == "toggle":
 
-            if parsed == STATUS.CONNECTED:
+            if parsed != STATUS.DISCONNECTED:
                 expressvpn("disconnect")
             else:
                 loc = keys[descriptors.index(values["loc"])]
